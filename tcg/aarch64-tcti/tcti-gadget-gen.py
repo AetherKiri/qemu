@@ -736,6 +736,32 @@ simple("mb_ld",  "dmb ishld")
 # address of its counter block and the number of guest instructions covered by
 # the TB as stream immediates, which keeps the gadget free of relocations and
 # costs nothing when the translator omits the preamble.
+# Translation-block entry probe with guest-PC attribution.
+#
+# Same counters as tb_enter, plus the block's guest PC, folded by a C helper.
+# The call follows the same save/restore discipline as the `call` gadget, so
+# the guest state in x0-x15 and the TCTI temporaries survive it.
+simple("tb_enter_pc",
+    # x24 = profiling counters pushed by the translator.
+    "ldr x24, [x28], #8",
+
+    # x27 = guest instructions covered by this translation block.
+    "ldr x27, [x28], #8",
+
+    # x23 = histogram helper address.
+    "ldr x23, [x28], #8",
+
+    *C_CALL_PROLOGUE,
+
+    # The guest PC lives in the CPU state: this build uses CF_PCREL, so the
+    # translation block does not carry a usable pc field.
+    "mov x0, x14",
+    "mov x1, x27",
+    "blr x23",
+
+    *C_CALL_EPILOGUE
+)
+
 simple("tb_enter",
     # x24 = profiling counters pushed by the translator.
     "ldr x24, [x28], #8",

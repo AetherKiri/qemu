@@ -35,6 +35,17 @@ bool madeira_se_tcti_perf_enabled(void);
 /* Called once per translation block when profiling is enabled. */
 void madeira_se_tcti_perf_note_translation(uint32_t guest_instructions);
 
+/*
+ * Called from the translation-block entry probe. It folds the block's guest
+ * instruction count into the cumulative counters and records the block's guest
+ * PC in a histogram, which is what tells us *which* guest code the budget is
+ * spent on (engine, Wine, the D3D9 layer, ...) instead of only how much.
+ */
+void madeira_se_tcti_perf_note_tb(const void *cpu_env, uint64_t guest_instructions);
+
+/* Prints the hottest translation-block PCs seen so far (once per interval). */
+void madeira_se_tcti_perf_dump_pc_histogram(void);
+
 /* Cumulative counters; any argument may be NULL. */
 void madeira_se_tcti_perf_read(uint64_t *guest_instructions,
                                uint64_t *tb_entries,

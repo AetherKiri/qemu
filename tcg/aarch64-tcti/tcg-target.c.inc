@@ -2141,9 +2141,10 @@ static void tcg_out_tb_start(TCGContext *s)
     }
 
     madeira_se_tcti_perf_note_translation(s->gen_tb->icount);
-    tcg_out_gadget(s, gadget_tb_enter);
+    tcg_out_gadget(s, gadget_tb_enter_pc);
     tcg_out64(s, (uint64_t)(uintptr_t)&madeira_se_tcti_perf_state);
     tcg_out64(s, s->gen_tb->icount);
+    tcg_out64(s, (uint64_t)(uintptr_t)&madeira_se_tcti_perf_note_tb);
 }
 
 bool tcg_target_has_memory_bswap(MemOp memop)

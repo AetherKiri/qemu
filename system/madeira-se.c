@@ -786,6 +786,9 @@ static void madeira_se_backend_perf_counters(
                               &out_counters->tb_entries,
                               &out_counters->tb_translations,
                               &out_counters->translated_instructions);
+    if (madeira_se_tcti_perf_enabled()) {
+        madeira_se_tcti_perf_dump_pc_histogram();
+    }
 }
 
 static void madeira_se_backend_destroy(void *userdata, void *opaque)

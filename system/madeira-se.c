@@ -26,6 +26,7 @@
 #include "accel/tcg/tcg-accel-ops-icount.h"
 
 #include "madeira_se_cpu.h"
+#include "system/madeira-se-tcti-perf.h"
 
 typedef struct MadeiraSEQemuInstance {
     madeira_se_architecture_t architecture;
@@ -147,6 +148,40 @@ static bool madeira_se_range_has_mapping(uint64_t guest_address, uint64_t size,
         }
     }
     return false;
+}
+
+/*
+ * Copies guest memory through the Wine-provided mappings. Callers run on the
+ * CPU thread with the BQL held, which is the same context that maintains the
+ * mapping list.
+ */
+static bool madeira_se_read_guest(uint64_t guest_address, void *destination,
+                                  size_t size)
+{
+    uint8_t *out = destination;
+    uint64_t cursor = guest_address;
+    uint64_t remaining = size;
+
+    while (remaining > 0) {
+        MadeiraSEQemuMapping *mapping;
+        uint64_t offset;
+        size_t chunk;
+
+        for (mapping = madeira_se_mappings; mapping != NULL;
+             mapping = mapping->next) {
+            if (cursor >= mapping->guest_address &&
+                cursor - mapping->guest_address < mapping->size)
+                break;
+        }
+        if (mapping == NULL) return false;
+        offset = cursor - mapping->guest_address;
+        chunk = (size_t)MIN(remaining, mapping->size - offset);
+        memcpy(out, (const uint8_t *)mapping->host_address + offset, chunk);
+        out += chunk;
+        cursor += chunk;
+        remaining -= chunk;
+    }
+    return true;
 }
 
 static void madeira_se_remove_mapping(MadeiraSEQemuMapping **link)
@@ -551,7 +586,26 @@ static void madeira_se_run_on_cpu(CPUState *cs, run_on_cpu_data data)
         run->result->service_number = env->regs[R_EAX];
     } else if (env->eip == run->request->unix_call_dispatcher) {
         run->result->reason = MADEIRA_SE_CPU_EXIT_UNIX_CALL;
-        run->result->service_number = env->regs[R_EAX];
+        /*
+         * The dispatcher was called as a function: the guest stack holds the
+         * return address followed by Wine's struct guest_unix_call
+         * { unixlib_handle, id, args }. The unixlib function index is what
+         * identifies the service; %eax only holds whatever the caller left
+         * behind. Fall back to the register so the exit is still recorded if
+         * the stack is not mapped yet.
+         */
+        {
+            uint32_t frame[3];
+            uint32_t stack_pointer = (uint32_t)env->regs[R_ESP];
+
+            if (madeira_se_read_guest(stack_pointer + sizeof(uint32_t),
+                                      frame, sizeof(frame))) {
+                run->result->service_number =
+                    ((uint64_t)frame[0] << 32) | frame[1];
+            } else {
+                run->result->service_number = env->regs[R_EAX];
+            }
+        }
     } else if (cpu_result == EXCP_HLT || cpu_result == EXCP_HALTED) {
         run->result->reason = MADEIRA_SE_CPU_EXIT_HALT;
     } else if (cpu_result >= 0 && cpu_result < EXCP_INTERRUPT) {
@@ -718,6 +772,22 @@ static int madeira_se_backend_invalidate(void *userdata, void *opaque,
     return 0;
 }
 
+static void madeira_se_backend_perf_counters(
+    void *userdata, void *opaque, madeira_se_cpu_perf_counters_t *out_counters)
+{
+    (void)userdata;
+    (void)opaque;
+    if (out_counters == NULL) {
+        return;
+    }
+    memset(out_counters, 0, sizeof(*out_counters));
+    out_counters->version = MADEIRA_SE_CPU_ABI_VERSION;
+    madeira_se_tcti_perf_read(&out_counters->guest_instructions,
+                              &out_counters->tb_entries,
+                              &out_counters->tb_translations,
+                              &out_counters->translated_instructions);
+}
+
 static void madeira_se_backend_destroy(void *userdata, void *opaque)
 {
     MadeiraSEQemuInstance *instance = opaque;
@@ -777,6 +847,7 @@ const madeira_se_cpu_backend_t *madeira_se_qemu_tcti_backend(void)
         .memory_event = madeira_se_backend_memory_event,
         .invalidate = madeira_se_backend_invalidate,
         .destroy = madeira_se_backend_destroy,
+        .perf_counters = madeira_se_backend_perf_counters,
     };
 
     return &backend;

@@ -4200,7 +4200,8 @@ foreach target : target_dirs
   # Madeira-SE loads the x86 frontend from QEMU's shared-library build. Keep
   # its execution adapter out of unrelated architectures and static builds.
   if get_option('shared_lib') and target_base_arch == 'i386'
-    arch_srcs += files('system/madeira-se.c')
+    arch_srcs += files('system/madeira-se.c',
+                       'system/madeira-se-tcti-perf.c')
   endif
 
   target_inc = [include_directories('target' / config_target['TARGET_BASE_ARCH'])]

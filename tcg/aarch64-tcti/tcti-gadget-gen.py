@@ -729,6 +729,31 @@ simple("mb_all", "dmb ish")
 simple("mb_st",  "dmb ishst")
 simple("mb_ld",  "dmb ishld")
 
+# Translation-block entry probe.
+#
+# Every TB begins with this gadget when Madeira-SE profiling is enabled, so
+# both plain and chained TB entries are counted. The translator pushes the
+# address of its counter block and the number of guest instructions covered by
+# the TB as stream immediates, which keeps the gadget free of relocations and
+# costs nothing when the translator omits the preamble.
+simple("tb_enter",
+    # x24 = profiling counters pushed by the translator.
+    "ldr x24, [x28], #8",
+
+    # x27 = guest instructions covered by this translation block.
+    "ldr x27, [x28], #8",
+
+    # counters->guest_instructions += tb->icount
+    "ldr x26, [x24]",
+    "add x26, x26, x27",
+    "str x26, [x24]",
+
+    # counters->tb_entries += 1
+    "ldr x27, [x24, #8]",
+    "add x27, x27, #1",
+    "str x27, [x24, #8]"
+)
+
 
 
 

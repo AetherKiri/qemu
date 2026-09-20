@@ -40,6 +40,7 @@
 
 // Grab our gadget headers.
 #include "tcti_gadgets.h"
+#include "system/madeira-se-tcti-perf.h"
 
 /* Marker for missing code. */
 #define TODO() \
@@ -2127,7 +2128,22 @@ static inline void tcg_target_qemu_prologue(TCGContext *s)
 
 static void tcg_out_tb_start(TCGContext *s)
 {
-    /* nothing to do */
+    /*
+     * Madeira-SE throughput profiling.
+     *
+     * The probe is emitted into the bytecode stream itself, so translation
+     * blocks reached through a chained branch are counted as well. It only
+     * increments counters, which leaves guest time and guest state alone, and
+     * it is emitted only when the environment asked for instrumentation.
+     */
+    if (!madeira_se_tcti_perf_enabled()) {
+        return;
+    }
+
+    madeira_se_tcti_perf_note_translation(s->gen_tb->icount);
+    tcg_out_gadget(s, gadget_tb_enter);
+    tcg_out64(s, (uint64_t)(uintptr_t)&madeira_se_tcti_perf_state);
+    tcg_out64(s, s->gen_tb->icount);
 }
 
 bool tcg_target_has_memory_bswap(MemOp memop)

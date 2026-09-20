@@ -486,6 +486,15 @@ struct CPUState {
     bool unplug;
     bool crash_occurred;
     bool exit_request;
+#ifdef CONFIG_SHARED_LIBRARY_BUILD
+    /* Return architectural faults to Madeira-SE instead of injecting an IDT. */
+    bool madeira_se_user_mode;
+    /* Stop at Wine's data-only dispatch sentinels without installing GDB
+     * breakpoints for every execution slice. */
+    bool madeira_se_dispatchers_enabled;
+    vaddr madeira_se_syscall_dispatcher;
+    vaddr madeira_se_unix_call_dispatcher;
+#endif
     int exclusive_context_count;
     uint32_t cflags_next_tb;
     /* updates protected by BQL */

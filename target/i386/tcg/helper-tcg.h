@@ -84,6 +84,10 @@ void x86_cpu_record_sigbus(CPUState *cs, vaddr addr,
 bool x86_cpu_tlb_fill(CPUState *cs, vaddr address, int size,
                       MMUAccessType access_type, int mmu_idx,
                       bool probe, uintptr_t retaddr);
+void x86_cpu_do_transaction_failed(CPUState *cs, hwaddr physaddr, vaddr addr,
+                                   unsigned size, MMUAccessType access_type,
+                                   int mmu_idx, MemTxAttrs attrs,
+                                   MemTxResult response, uintptr_t retaddr);
 G_NORETURN void x86_cpu_do_unaligned_access(CPUState *cs, vaddr vaddr,
                                             MMUAccessType access_type,
                                             int mmu_idx, uintptr_t retaddr);

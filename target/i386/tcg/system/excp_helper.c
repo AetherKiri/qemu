@@ -650,6 +650,50 @@ bool x86_cpu_tlb_fill(CPUState *cs, vaddr addr, int size,
     raise_exception_err_ra(env, err.exception_index, err.error_code, retaddr);
 }
 
+void x86_cpu_do_transaction_failed(CPUState *cs, hwaddr physaddr, vaddr addr,
+                                   unsigned size, MMUAccessType access_type,
+                                   int mmu_idx, MemTxAttrs attrs,
+                                   MemTxResult response, uintptr_t retaddr)
+{
+#ifdef CONFIG_SHARED_LIBRARY_BUILD
+    if (cs->madeira_se_user_mode) {
+        CPUX86State *env = cpu_env(cs);
+        int error_code = PG_ERROR_U_MASK;
+
+        /* The callback runs from translated code, so restore the precise
+         * architectural RIP and register state before reporting the fault. */
+        (void)cpu_restore_state(cs, retaddr);
+
+        /* A decode error means that no Madeira-SE guest mapping exists.
+         * Access errors come from a present mapping whose protection rejects
+         * the operation. */
+        if (!(response & MEMTX_DECODE_ERROR)) {
+            error_code |= PG_ERROR_P_MASK;
+        }
+        if (access_type == MMU_DATA_STORE) {
+            error_code |= PG_ERROR_W_MASK;
+        } else if (access_type == MMU_INST_FETCH) {
+            error_code |= PG_ERROR_I_D_MASK;
+        }
+
+        env->cr[2] = addr;
+        env->error_code = error_code;
+        cs->exception_index = EXCP0E_PAGE;
+        env->exception_is_int = 0;
+        env->exception_next_eip = -1;
+        cpu_loop_exit_restore(cs, retaddr);
+    }
+#endif
+
+    /* PC hardware traditionally returns all ones for an unhandled physical
+     * bus cycle, so keep the existing system-emulation behavior outside the
+     * Madeira-SE user-mode adapter. */
+    (void)physaddr;
+    (void)size;
+    (void)mmu_idx;
+    (void)attrs;
+}
+
 G_NORETURN void x86_cpu_do_unaligned_access(CPUState *cs, vaddr vaddr,
                                             MMUAccessType access_type,
                                             int mmu_idx, uintptr_t retaddr)

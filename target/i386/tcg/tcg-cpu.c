@@ -120,6 +120,7 @@ static const TCGCPUOps x86_tcg_ops = {
     .record_sigbus = x86_cpu_record_sigbus,
 #else
     .tlb_fill = x86_cpu_tlb_fill,
+    .do_transaction_failed = x86_cpu_do_transaction_failed,
     .do_interrupt = x86_cpu_do_interrupt,
     .cpu_exec_halt = x86_cpu_exec_halt,
     .cpu_exec_interrupt = x86_cpu_exec_interrupt,

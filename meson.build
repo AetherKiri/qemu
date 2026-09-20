@@ -719,7 +719,7 @@ hardening_flags = [
 #
 # NB2: This clashes with the "retguard" extension of OpenBSD's Clang
 # https://gitlab.com/qemu-project/qemu/-/issues/2278
-if host_os != 'openbsd' and \
+if not get_option('madeira_se_performance') and host_os != 'openbsd' and \
    cc.compiles('extern struct { void (*cb)(void); } s; void f(void) { s.cb(); }',
                name: '-fzero-call-used-regs=used-gpr',
                args: ['-O2', '-fzero-call-used-regs=used-gpr'])
@@ -4196,6 +4196,12 @@ foreach target : target_dirs
             '-DCONFIG_TARGET="@0@-config-target.h"'.format(target),
   ]
   link_args = emulator_link_args
+
+  # Madeira-SE loads the x86 frontend from QEMU's shared-library build. Keep
+  # its execution adapter out of unrelated architectures and static builds.
+  if get_option('shared_lib') and target_base_arch == 'i386'
+    arch_srcs += files('system/madeira-se.c')
+  endif
 
   target_inc = [include_directories('target' / config_target['TARGET_BASE_ARCH'])]
   if host_os == 'linux'

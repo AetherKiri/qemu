@@ -371,6 +371,26 @@ static bool check_for_breakpoints_slow(CPUState *cpu, vaddr pc,
 static inline bool check_for_breakpoints(CPUState *cpu, vaddr pc,
                                          uint32_t *cflags)
 {
+#if defined(CONFIG_SHARED_LIBRARY_BUILD) && defined(TARGET_I386)
+    if (unlikely(cpu->madeira_se_dispatchers_enabled)) {
+        vaddr syscall_dispatcher = cpu->madeira_se_syscall_dispatcher;
+        vaddr unix_call_dispatcher = cpu->madeira_se_unix_call_dispatcher;
+
+        if (pc == syscall_dispatcher || pc == unix_call_dispatcher) {
+            cpu->exception_index = EXCP_DEBUG;
+            return true;
+        }
+
+        /* A TB beginning elsewhere on a dispatcher page must return after
+         * each instruction so the exact-PC check above cannot be skipped. */
+        if (((pc ^ syscall_dispatcher) & TARGET_PAGE_MASK) == 0 ||
+            ((pc ^ unix_call_dispatcher) & TARGET_PAGE_MASK) == 0) {
+            *cflags = (*cflags & ~CF_COUNT_MASK) |
+                CF_NO_GOTO_TB | CF_BP_PAGE | 1;
+        }
+    }
+#endif
+
     return unlikely(!QTAILQ_EMPTY(&cpu->breakpoints)) &&
         check_for_breakpoints_slow(cpu, pc, cflags);
 }
@@ -740,6 +760,18 @@ static inline bool cpu_handle_exception(CPUState *cpu, int *ret)
     cpu->exception_index = -1;
     return true;
 #else
+#if defined(CONFIG_SHARED_LIBRARY_BUILD) && defined(TARGET_I386)
+    if (cpu->madeira_se_user_mode) {
+        /*
+         * Madeira-SE supplies Win32 user-mode exception handling through
+         * Wine.  Let its CPU provider observe the raw x86 vector instead of
+         * asking system emulation to dispatch through a guest IDT.
+         */
+        *ret = cpu->exception_index;
+        cpu->exception_index = -1;
+        return true;
+    }
+#endif
     if (replay_exception()) {
         const TCGCPUOps *tcg_ops = cpu->cc->tcg_ops;
 

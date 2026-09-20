@@ -66,6 +66,9 @@ option('qga_vss', type : 'feature', value: 'auto',
 option('shared_lib', type: 'boolean', value: false,
        description: 'Build QEMU as a shared library')
 
+option('madeira_se_performance', type: 'boolean', value: false,
+       description: 'Tune the shared TCTI build for Madeira-SE execution')
+
 option('malloc_trim', type : 'feature', value : 'auto',
        description: 'enable libc malloc_trim() for memory optimization')
 option('malloc', type : 'combo', choices : ['system', 'tcmalloc', 'jemalloc'],

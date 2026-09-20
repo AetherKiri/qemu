@@ -8,4 +8,6 @@
   qemu_thread_create;
   replay_mutex_lock;
   replay_mutex_unlock;
+  madeira_se_qemu_tcti_smoke;
+  madeira_se_qemu_tcti_backend;
 };

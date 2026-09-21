@@ -780,6 +780,56 @@ simple("tb_enter",
     "str x27, [x24, #8]"
 )
 
+# Madeira-SE memory-idiom loop guard.
+#
+# Emitted as the first gadget of a translation block, ahead of the block's own
+# code.  The translator writes the block's MadeiraSeTctiLoopState - a counter,
+# a threshold and a flag word - directly behind this gadget's address, so at
+# entry x28 *is* the state pointer; the helper's address follows the state.
+#
+# Counting entries is all this gadget does on its own: guest blocks that run
+# once or twice retire after a load and a compare, while blocks that loop reach
+# the threshold and get one C call to decide what to do about them.
+simple("tb_loop_guard",
+    # Already retired by the helper: skip our slots and run the block.
+    "ldrh w26, [x28, #4]",
+    "cbnz w26, 2f",
+
+    # state->counter++ ...
+    "ldrh w26, [x28]",
+    "ldrh w27, [x28, #2]",
+    "add w26, w26, #1",
+    "strh w26, [x28]",
+
+    # ... until it reaches this block's threshold.
+    "cmp w26, w27",
+    "b.lo 2f",
+
+    # Slow path: x23/x24 are callee-saved, so the helper may clobber the rest.
+    # The state pointer and the helper address are the two stream immediates
+    # that follow.
+    "ldr x23, [x28, #8]",
+    "mov x24, x28",
+    "add x28, x28, #16",
+
+    # Return address for GETPC() inside the helper, as in the call gadget.
+    "str x28, [x25]",
+
+    *C_CALL_PROLOGUE,
+    "mov x0, x14",
+    "mov x1, x24",
+    "blr x23",
+    *C_CALL_EPILOGUE,
+
+    # x28 was advanced before the call and restored by the epilogue, so both
+    # paths join with the stream pointer at the block's first real gadget.
+    "b 3f",
+
+    "2:",
+    "add x28, x28, #16",
+    "3:"
+)
+
 
 
 
@@ -1168,26 +1218,16 @@ vector_math_dnm("shlv", "ushl")
 vector_math_dnm("sshl", "sshl")
 
 def filter_shl(size, imm):
-    match size:
-        case '16b': return imm >= 8
-        case '8b': return imm >= 8
-        case '4h': return imm >= 16
-        case '8h': return imm >= 16
-        case '2s': return imm >= 32
-        case '4s': return imm >= 32
-    return False
+    # Written without a match statement so that the generator also runs on the
+    # system Python that ships with macOS.
+    limits = { '16b': 8, '8b': 8, '4h': 16, '8h': 16, '2s': 32, '4s': 32 }
+    return imm >= limits.get(size, 1 << 30)
 
 def filter_shr(size, imm):
     if imm == 0:
         return True
-    match size:
-        case '16b': return imm > 8
-        case '8b': return imm > 8
-        case '4h': return imm > 16
-        case '8h': return imm > 16
-        case '2s': return imm > 32
-        case '4s': return imm > 32
-    return False
+    limits = { '16b': 8, '8b': 8, '4h': 16, '8h': 16, '2s': 32, '4s': 32 }
+    return imm > limits.get(size, 1 << 30)
 
 vector_math_dn_immediate("shl", "shl", immediate_range=range(64), filter=filter_shl)
 vector_math_dn_immediate("ushr", "ushr", immediate_range=range(1,65), filter=filter_shr)

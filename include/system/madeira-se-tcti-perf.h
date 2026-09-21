@@ -25,6 +25,26 @@ typedef struct MadeiraSeTctiPerfState {
     /* Updated by the translator instead of the gadget stream. */
     uint64_t tb_translations;
     uint64_t translated_instructions;
+    /*
+     * Loop guard (see madeira-se-tcti-loop.c).  These are counted whether or
+     * not the instruction probe is enabled, because they say how much guest
+     * work left the interpreter - which is what the fps budget turns on.
+     */
+    uint64_t loop_guard_calls;     /* times a block asked the helper */
+    uint64_t loop_accelerated;     /* times the helper replayed iterations */
+    uint64_t loop_iterations;      /* guest iterations replayed natively */
+    uint64_t loop_bytes;           /* bytes moved by those iterations */
+    uint64_t loop_backoffs;        /* helper declined, block may ask again */
+    uint64_t loop_pattern_misses;  /* not a memory idiom; block marked dead */
+    /* Why the helper declined, so a coverage gap can be attributed. */
+    uint64_t loop_reject_no_code;   /* code page not directly readable */
+    uint64_t loop_reject_short;     /* too few iterations to be worth a call */
+    uint64_t loop_reject_small_count; /* counter says the loop is done */
+    uint64_t loop_reject_overlap;   /* source and destination overlap */
+    uint64_t loop_reject_map;       /* a piece is MMIO, watchpointed or unmapped */
+    uint64_t loop_reject_other;     /* wrapping range, 16-bit code, bad value */
+    uint64_t loop_reject_align;     /* an element would straddle a page */
+    uint64_t loop_move_calls;       /* ranges handed to the bulk mover */
 } MadeiraSeTctiPerfState;
 
 extern MadeiraSeTctiPerfState madeira_se_tcti_perf_state;

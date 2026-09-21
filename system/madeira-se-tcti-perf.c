@@ -127,6 +127,8 @@ void madeira_se_tcti_perf_dump_pc_histogram(void)
     uint64_t total = 0;
     unsigned i, j;
     static uint64_t dump_seq;
+    static uint64_t last_loop[14];
+    uint64_t loop[14];
     uint64_t cum_insns;
     uint64_t cum_tb;
 
@@ -141,6 +143,25 @@ void madeira_se_tcti_perf_dump_pc_histogram(void)
      */
     cum_insns = qatomic_read(&madeira_se_tcti_perf_state.guest_instructions);
     cum_tb = qatomic_read(&madeira_se_tcti_perf_state.tb_entries);
+
+    /*
+     * The loop guard counters are cumulative, like the instruction counters,
+     * but a window is what the budget is expressed in - so report both.
+     */
+    loop[0] = qatomic_read(&madeira_se_tcti_perf_state.loop_guard_calls);
+    loop[1] = qatomic_read(&madeira_se_tcti_perf_state.loop_accelerated);
+    loop[2] = qatomic_read(&madeira_se_tcti_perf_state.loop_iterations);
+    loop[3] = qatomic_read(&madeira_se_tcti_perf_state.loop_bytes);
+    loop[4] = qatomic_read(&madeira_se_tcti_perf_state.loop_backoffs);
+    loop[5] = qatomic_read(&madeira_se_tcti_perf_state.loop_pattern_misses);
+    loop[6] = qatomic_read(&madeira_se_tcti_perf_state.loop_reject_no_code);
+    loop[7] = qatomic_read(&madeira_se_tcti_perf_state.loop_reject_short);
+    loop[8] = qatomic_read(&madeira_se_tcti_perf_state.loop_reject_small_count);
+    loop[9] = qatomic_read(&madeira_se_tcti_perf_state.loop_reject_overlap);
+    loop[10] = qatomic_read(&madeira_se_tcti_perf_state.loop_reject_map);
+    loop[11] = qatomic_read(&madeira_se_tcti_perf_state.loop_reject_other);
+    loop[12] = qatomic_read(&madeira_se_tcti_perf_state.loop_reject_align);
+    loop[13] = qatomic_read(&madeira_se_tcti_perf_state.loop_move_calls);
 
     for (i = 0; i < MADEIRA_SE_TCTI_PC_BUCKETS; i++) {
         if (madeira_se_tcti_pc_buckets[i].epoch != madeira_se_tcti_pc_epoch)
@@ -169,7 +190,12 @@ void madeira_se_tcti_perf_dump_pc_histogram(void)
     fprintf(stderr,
             "MADEIRA_SE_PERF_PC seq=%llu cum_insns=%llu cum_tb=%llu "
             "total_insns=%llu spilled_insns=%llu "
-            "spilled_tb=%llu coverage_pct=%.2f\n",
+            "spilled_tb=%llu coverage_pct=%.2f "
+            "loop_calls=%llu loop_accel=%llu loop_iters=%llu "
+            "loop_bytes=%llu loop_backoff=%llu loop_dead=%llu "
+            "rej_no_code=%llu rej_short=%llu rej_small_count=%llu "
+            "rej_overlap=%llu rej_map=%llu rej_other=%llu rej_align=%llu "
+            "move_calls=%llu\n",
             (unsigned long long)++dump_seq,
             (unsigned long long)cum_insns, (unsigned long long)cum_tb,
             (unsigned long long)total,
@@ -177,7 +203,22 @@ void madeira_se_tcti_perf_dump_pc_histogram(void)
             (unsigned long long)madeira_se_tcti_pc_spilled_count,
             total ? 100.0 * (double)total /
                         (double)(total + madeira_se_tcti_pc_spilled_insns)
-                  : 0.0);
+                  : 0.0,
+            (unsigned long long)(loop[0] - last_loop[0]),
+            (unsigned long long)(loop[1] - last_loop[1]),
+            (unsigned long long)(loop[2] - last_loop[2]),
+            (unsigned long long)(loop[3] - last_loop[3]),
+            (unsigned long long)(loop[4] - last_loop[4]),
+            (unsigned long long)(loop[5] - last_loop[5]),
+            (unsigned long long)(loop[6] - last_loop[6]),
+            (unsigned long long)(loop[7] - last_loop[7]),
+            (unsigned long long)(loop[8] - last_loop[8]),
+            (unsigned long long)(loop[9] - last_loop[9]),
+            (unsigned long long)(loop[10] - last_loop[10]),
+            (unsigned long long)(loop[11] - last_loop[11]),
+            (unsigned long long)(loop[12] - last_loop[12]),
+            (unsigned long long)(loop[13] - last_loop[13]));
+    memcpy(last_loop, loop, sizeof(last_loop));
     for (j = 0; j < kTop; j++) {
         if (!best_insns[j])
             break;
